@@ -1,0 +1,84 @@
+name: magento
+
+# Start with the default LAMP recipe
+recipe: lamp
+
+# Configure the lamp recipe
+config:
+  php: '7.4'
+  webroot: .
+  database: mysql
+  composer_version: '2.2.6'
+
+
+
+services:
+  database:
+    type: mysql
+    portforward: true
+
+  elasticsearch:
+    type: elasticsearch:7
+    portforward: true
+
+  phpmyadmin:
+    type: phpmyadmin
+    hosts:
+      - database
+
+  appserver:
+    # This will only run the first time `lando start` is executed or on `lando rebuild`
+    build_as_root:
+      # Install Magento-required xsl extension
+      - apt-get update -y -q && apt-get install -y libxslt-dev && docker-php-ext-install xsl && docker-php-ext-install sockets && docker-php-ext-enable xsl && docker-php-ext-enable sockets
+
+tooling:
+  magento:download:
+    description: Initialize Magento 2 project in current directory
+    cmd:  composer create-project --repository-url=https://repo.magento.com/ magento/project-community-edition
+    service: appserver
+    level: app
+
+  magento:setup:quick:
+    description: Automated process to quickly configure Magento for Lando. Accepts `bin/magento setup:install` arguments
+    cmd: test -f /app/bin/magento || exit 0 && /app/bin/magento setup:install --db-host database --db-name lamp --db-user lamp --db-password lamp --admin-firstname Magento --admin-lastname Admin --admin-email {{YOUR_EMAIL}} --admin-user {{YOUR_USER}} --admin-password {{YOUR_PASSWORD}} --use-rewrites 1 --magento-init-params="MAGE_MODE=developer"
+    service: appserver
+    options: # Options are required in order for `lando --help` to work for this command
+      "help":
+        passthrough: false
+
+    magento:setup:uninstall:
+      description: Automated process to quickly configure Magento for Lando. Accepts `bin/magento setup:uninstall` arguments
+      cmd: /app/bin/magento setup:uninstall
+      service: appserver
+
+
+  magento:setup:upgrade:
+    description: Automated process to quickly Update Magento.
+    cmd: /app/bin/magento setup:upgrade
+    service: appserver
+
+  magento:setup:deploy:
+    description: Automated process to quickly Magento.
+    cmd: /app/bin/magento setup:static-content:deploy -f
+    service: appserver
+
+  magento:setup:clean:
+    description: Automated process to quickly Clean Magento.
+    cmd: /app/bin/magento cache:clean
+    service: appserver
+
+  magento:setup:flush:
+    description: Automated process to quickly Flush Magento.
+    cmd: /app/bin/magento cache:flush
+    service: appserver
+
+  magento:setup:module:
+    description : Automated process to enable model Magento.
+    cmd : /app/bin/magento maintenance:enable
+    service: appserver
+
+
+proxy:
+  appserver:
+    - magento.lndo.site
